@@ -230,6 +230,15 @@ public class BuildExecutor {
     }
 
     /**
+     * Checks if currently building (for renderer to hide preview).
+     */
+    public boolean isBuilding() {
+        return state == BuildState.BUILDING ||
+                state == BuildState.LAYER_COMPLETE ||
+                state == BuildState.PAUSED;
+    }
+
+    /**
      * Gets current progress info.
      */
     public String getProgressInfo() {
