@@ -55,127 +55,105 @@ public class FakePlayerBuilder {
 
     /**
      * Creates a SyncedClientOptions object using reflection.
+     * This method tries multiple approaches to create the object.
      */
     private static Object createSyncedClientOptions() throws Exception {
-        // Try MANY different class names
+        // Try to find the class using different possible names
         String[] possibleClassNames = {
-            "net.minecraft.class_7596",  // Intermediary mapping (most reliable)
-            "net.minecraft.server.network.SyncedClientOptions",  // Yarn 1.21+
-            "net.minecraft.client.option.SyncedClientOptions",  // Old Yarn
-            "net.minecraft.server.network.ServerPlayerEntity$SyncedClientOptions",  // Nested class?
+                "net.minecraft.class_7596",  // Intermediary mapping
+                "net.minecraft.server.network.SyncedClientOptions",  // Yarn
+                "net.minecraft.client.option.SyncedClientOptions"
         };
+
+        Class<?> syncedOptionsClass = null;
 
         for (String className : possibleClassNames) {
             try {
-                Class<?> clazz = Class.forName(className);
-                LOGGER.info("✓ Found SyncedClientOptions class: {}", className);
-
-                // Try createDefault() method (static factory)
-                try {
-                    Method createDefault = clazz.getMethod("createDefault");
-                    createDefault.setAccessible(true);
-                    Object result = createDefault.invoke(null);
-                    LOGGER.info("✓ Created SyncedClientOptions using createDefault()");
-                    return result;
-                } catch (NoSuchMethodException e) {
-                    LOGGER.debug("No createDefault() method");
-                }
-
-                // Try intermediary method name
-                try {
-                    Method method = clazz.getMethod("method_44709");
-                    method.setAccessible(true);
-                    Object result = method.invoke(null);
-                    LOGGER.info("✓ Created SyncedClientOptions using method_44709()");
-                    return result;
-                } catch (NoSuchMethodException e) {
-                    LOGGER.debug("No method_44709() method");
-                }
-
-                // Try to find ANY static method that returns this type
-                for (Method method : clazz.getDeclaredMethods()) {
-                    if (java.lang.reflect.Modifier.isStatic(method.getModifiers()) &&
-                        method.getReturnType() == clazz &&
-                        method.getParameterCount() == 0) {
-                        try {
-                            method.setAccessible(true);
-                            Object result = method.invoke(null);
-                            LOGGER.info("✓ Created SyncedClientOptions using {}", method.getName());
-                            return result;
-                        } catch (Exception ex) {
-                            // Continue
-                        }
-                    }
-                }
-
-                // Try no-args constructor
-                try {
-                    Constructor<?> constructor = clazz.getDeclaredConstructor();
-                    constructor.setAccessible(true);
-                    Object result = constructor.newInstance();
-                    LOGGER.info("✓ Created SyncedClientOptions using no-args constructor");
-                    return result;
-                } catch (NoSuchMethodException e) {
-                    LOGGER.debug("No no-args constructor");
-                }
-
-                // Try ANY constructor with default parameters
-                for (Constructor<?> constructor : clazz.getDeclaredConstructors()) {
-                    try {
-                        constructor.setAccessible(true);
-                        Class<?>[] paramTypes = constructor.getParameterTypes();
-                        Object[] params = new Object[paramTypes.length];
-                        
-                        // Fill with defaults
-                        for (int i = 0; i < paramTypes.length; i++) {
-                            if (paramTypes[i] == boolean.class) params[i] = false;
-                            else if (paramTypes[i] == int.class) params[i] = 0;
-                            else if (paramTypes[i] == float.class) params[i] = 0.0f;
-                            else if (paramTypes[i] == double.class) params[i] = 0.0;
-                            else if (paramTypes[i] == String.class) params[i] = "";
-                            // else remains null
-                        }
-                        
-                        Object result = constructor.newInstance(params);
-                        LOGGER.info("✓ Created SyncedClientOptions using constructor with {} params", paramTypes.length);
-                        return result;
-                    } catch (Exception ex) {
-                        // Continue
-                    }
-                }
-
+                syncedOptionsClass = Class.forName(className);
+                LOGGER.info("Found SyncedClientOptions class: {}", className);
+                break;
             } catch (ClassNotFoundException e) {
-                LOGGER.debug("Class not found: {}", className);
+                // Try next
             }
         }
 
-        LOGGER.error("Failed to find SyncedClientOptions with any of:");
-        for (String name : possibleClassNames) {
-            LOGGER.error("  - {}", name);
+        if (syncedOptionsClass == null) {
+            LOGGER.error("Could not find SyncedClientOptions class");
+            throw new RuntimeException("Could not find SyncedClientOptions class");
         }
-        throw new RuntimeException("Could not find or create SyncedClientOptions");
+
+        // Try to create instance using various methods
+
+        // Method 1: Try static factory methods
+        for (Method method : syncedOptionsClass.getDeclaredMethods()) {
+            if (java.lang.reflect.Modifier.isStatic(method.getModifiers()) &&
+                    method.getReturnType() == syncedOptionsClass &&
+                    method.getParameterCount() == 0) {
+                try {
+                    method.setAccessible(true);
+                    Object result = method.invoke(null);
+                    LOGGER.info("Created SyncedClientOptions using static method: {}", method.getName());
+                    return result;
+                } catch (Exception e) {
+                    LOGGER.debug("Failed with method {}: {}", method.getName(), e.getMessage());
+                }
+            }
+        }
+
+        // Method 2: Try constructors
+        for (Constructor<?> constructor : syncedOptionsClass.getDeclaredConstructors()) {
+            try {
+                constructor.setAccessible(true);
+                Class<?>[] paramTypes = constructor.getParameterTypes();
+                Object[] params = new Object[paramTypes.length];
+
+                // Fill with default values
+                for (int i = 0; i < paramTypes.length; i++) {
+                    if (paramTypes[i] == boolean.class) params[i] = false;
+                    else if (paramTypes[i] == int.class) params[i] = 2; // viewDistance
+                    else if (paramTypes[i] == float.class) params[i] = 1.0f;
+                    else if (paramTypes[i] == double.class) params[i] = 1.0;
+                    else if (paramTypes[i] == String.class) params[i] = "en_us";
+                    else if (paramTypes[i].isEnum()) {
+                        // Get first enum constant
+                        Object[] enumConstants = paramTypes[i].getEnumConstants();
+                        if (enumConstants != null && enumConstants.length > 0) {
+                            params[i] = enumConstants[0];
+                        }
+                    }
+                    // else remains null for object types
+                }
+
+                Object result = constructor.newInstance(params);
+                LOGGER.info("Created SyncedClientOptions using constructor with {} params", paramTypes.length);
+                return result;
+            } catch (Exception e) {
+                LOGGER.debug("Failed with constructor {}: {}", constructor, e.getMessage());
+            }
+        }
+
+        throw new RuntimeException("Could not create SyncedClientOptions instance");
     }
 
     /**
      * Creates ServerPlayerEntity using reflection to bypass type checking.
      */
-    private static ServerPlayerEntity createFakePlayer(MinecraftServer server, ServerWorld world, 
+    private static ServerPlayerEntity createFakePlayer(MinecraftServer server, ServerWorld world,
                                                        GameProfile profile) throws Exception {
-        // Create client options
         Object clientOptions = createSyncedClientOptions();
 
         // Find ServerPlayerEntity constructor
         Constructor<ServerPlayerEntity> constructor = ServerPlayerEntity.class.getDeclaredConstructor(
-            MinecraftServer.class,
-            ServerWorld.class,
-            GameProfile.class,
-            clientOptions.getClass()
+                MinecraftServer.class,
+                ServerWorld.class,
+                GameProfile.class,
+                clientOptions.getClass()
         );
-        
+
         constructor.setAccessible(true);
         ServerPlayerEntity player = constructor.newInstance(server, world, profile, clientOptions);
-        
-        LOGGER.info("✓ Successfully created ServerPlayerEntity");
+
+        LOGGER.info("Successfully created ServerPlayerEntity");
         return player;
     }
 
@@ -217,7 +195,7 @@ public class FakePlayerBuilder {
 
             return true;
         } catch (Exception e) {
-            LOGGER.error("Failed to spawn fake player", e);
+            LOGGER.error("Failed to spawn fake player: {}", e.getMessage());
             e.printStackTrace();
             return false;
         }

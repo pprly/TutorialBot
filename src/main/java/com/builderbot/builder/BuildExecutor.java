@@ -5,9 +5,8 @@ import com.builderbot.schematic.BlockEntry;
 import com.builderbot.schematic.BuildLayer;
 import com.builderbot.schematic.TutorialSchematic;
 import net.minecraft.block.BlockState;
-import net.minecraft.block.Blocks;
 import net.minecraft.server.world.ServerWorld;
-import net.minecraft.text.Text;
+import net.minecraft.sound.SoundCategory;
 import net.minecraft.util.math.BlockPos;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,17 +17,17 @@ import java.util.Set;
 import java.util.function.Consumer;
 
 /**
- * Executes the building process layer by layer.
- * Manages the fake player and coordinates the entire build.
+ * Executes building WITHOUT fake player - places blocks directly.
+ * Simple, reliable, works in 1.21+
  */
 public class BuildExecutor {
     private static final Logger LOGGER = LoggerFactory.getLogger("BuilderBot");
-    
+
     // Speed presets (ticks between blocks)
     private static final int[] SPEED_DELAYS = {
-        40, 35, 30, 25, 20, 15, 12, 8, 4, 2
+            40, 35, 30, 25, 20, 15, 12, 8, 4, 2
     };
-    
+
     // Blocks that can be safely replaced
     private static final Set<String> REPLACEABLE_BLOCKS = new HashSet<>();
     static {
@@ -67,49 +66,39 @@ public class BuildExecutor {
         REPLACEABLE_BLOCKS.add("minecraft:water");
         REPLACEABLE_BLOCKS.add("minecraft:lava");
     }
-    
+
     public enum BuildState {
         IDLE,
-        SPAWNING,
-        WALKING,
         BUILDING,
-        BREAKING,
-        LAYER_COMPLETE,
         PAUSED,
+        LAYER_COMPLETE,
         FINISHED,
         ERROR
     }
-    
-    private final FakePlayerBuilder builder;
+
     private TutorialSchematic schematic;
     private SchematicPlacement placement;
     private ServerWorld world;
-    
+
     // Build state
     private BuildState state = BuildState.IDLE;
     private int speed = 5; // 1-10, default medium
     private int tickCounter = 0;
-    
+
     // Progress tracking
     private List<BuildLayer> sortedLayers;
     private int currentLayerIndex = 0;
     private int currentBlockIndex = 0;
-    private BlockEntry currentBlock;
     private int totalBlocksBuilt = 0;
-    
+
     // Callbacks
     private Consumer<String> messageCallback;
     private Runnable layerCompleteCallback;
     private Runnable buildCompleteCallback;
-    
+
     public BuildExecutor() {
-        this.builder = new FakePlayerBuilder();
     }
-    
-    public BuildExecutor(String builderName) {
-        this.builder = new FakePlayerBuilder(builderName);
-    }
-    
+
     /**
      * Initializes the executor with schematic and placement.
      */
@@ -122,11 +111,11 @@ public class BuildExecutor {
         this.currentBlockIndex = 0;
         this.totalBlocksBuilt = 0;
         this.state = BuildState.IDLE;
-        
+
         LOGGER.info("BuildExecutor initialized: {} layers, {} total blocks",
-            sortedLayers.size(), schematic.getTotalBlocks());
+                sortedLayers.size(), schematic.getTotalBlocks());
     }
-    
+
     /**
      * Starts the building process.
      */
@@ -135,49 +124,39 @@ public class BuildExecutor {
             LOGGER.error("Cannot start: not initialized");
             return false;
         }
-        
+
         if (!placement.isConfirmed()) {
             LOGGER.error("Cannot start: placement not confirmed");
-            sendMessage("§cОшибка: сначала подтвердите размещение схемы (/build confirm)");
+            sendMessage("§cОшибка: сначала подтвердите размещение (/build confirm)");
             return false;
         }
-        
-        if (state == BuildState.BUILDING || state == BuildState.WALKING) {
+
+        if (state == BuildState.BUILDING) {
             LOGGER.warn("Build already in progress");
             return false;
         }
-        
-        // Spawn the fake player at the start position
-        BlockPos startPos = placement.getOrigin();
-        if (!builder.spawn(world, startPos)) {
-            LOGGER.error("Failed to spawn builder");
-            sendMessage("§cОшибка: не удалось создать строителя");
-            state = BuildState.ERROR;
-            return false;
-        }
-        
-        state = BuildState.SPAWNING;
+
+        state = BuildState.BUILDING;
         tickCounter = 0;
-        
+
         sendMessage("§aНачинаю строительство: " + schematic.getName());
         sendMessage("§7Слоёв: " + sortedLayers.size() + ", блоков: " + schematic.getTotalBlocks());
-        
+
         LOGGER.info("Build started");
         return true;
     }
-    
+
     /**
      * Pauses the building process.
      */
     public void pause() {
-        if (state == BuildState.BUILDING || state == BuildState.WALKING || 
-            state == BuildState.BREAKING) {
+        if (state == BuildState.BUILDING) {
             state = BuildState.PAUSED;
             sendMessage("§eСтроительство приостановлено");
             LOGGER.info("Build paused");
         }
     }
-    
+
     /**
      * Resumes the building process.
      */
@@ -188,17 +167,16 @@ public class BuildExecutor {
             LOGGER.info("Build resumed");
         }
     }
-    
+
     /**
      * Stops and cleans up the building process.
      */
     public void stop() {
-        builder.despawn();
         state = BuildState.IDLE;
         sendMessage("§cСтроительство остановлено");
         LOGGER.info("Build stopped");
     }
-    
+
     /**
      * Skips the current layer.
      */
@@ -206,7 +184,7 @@ public class BuildExecutor {
         if (state == BuildState.IDLE || state == BuildState.FINISHED) {
             return;
         }
-        
+
         if (currentLayerIndex < sortedLayers.size() - 1) {
             BuildLayer skippedLayer = sortedLayers.get(currentLayerIndex);
             currentLayerIndex++;
@@ -215,7 +193,7 @@ public class BuildExecutor {
             LOGGER.info("Skipped layer: {}", skippedLayer.getName());
         }
     }
-    
+
     /**
      * Goes to a specific layer by order number.
      */
@@ -231,7 +209,7 @@ public class BuildExecutor {
         }
         sendMessage("§cСлой с порядком " + order + " не найден");
     }
-    
+
     /**
      * Sets the building speed (1-10).
      */
@@ -239,18 +217,18 @@ public class BuildExecutor {
         this.speed = Math.max(1, Math.min(10, speed));
         sendMessage("§aСкорость: " + this.speed + "/10");
     }
-    
+
     public int getSpeed() {
         return speed;
     }
-    
+
     /**
      * Gets the current build state.
      */
     public BuildState getState() {
         return state;
     }
-    
+
     /**
      * Gets current progress info.
      */
@@ -258,231 +236,200 @@ public class BuildExecutor {
         if (schematic == null || sortedLayers == null || sortedLayers.isEmpty()) {
             return "Не загружено";
         }
-        
-        BuildLayer currentLayer = currentLayerIndex < sortedLayers.size() 
-            ? sortedLayers.get(currentLayerIndex) : null;
-        
+
+        BuildLayer currentLayer = currentLayerIndex < sortedLayers.size()
+                ? sortedLayers.get(currentLayerIndex) : null;
+
         String layerName = currentLayer != null ? currentLayer.getName() : "???";
         int layerBlocks = currentLayer != null ? currentLayer.getBlockCount() : 0;
-        
-        return String.format("%s - Слой: %s (%d/%d) | Блок: %d/%d | Всего: %d/%d",
-            state.name(),
-            layerName,
-            currentLayerIndex + 1,
-            sortedLayers.size(),
-            currentBlockIndex,
-            layerBlocks,
-            totalBlocksBuilt,
-            schematic.getTotalBlocks());
+
+        return String.format("Слой: %s (%d/%d) | Блок: %d/%d | Всего: %d/%d",
+                layerName,
+                currentLayerIndex + 1,
+                sortedLayers.size(),
+                currentBlockIndex,
+                layerBlocks,
+                totalBlocksBuilt,
+                schematic.getTotalBlocks());
     }
-    
-    /**
-     * Gets the fake player builder.
-     */
-    public FakePlayerBuilder getBuilder() {
-        return builder;
-    }
-    
+
     /**
      * Main tick method - call every game tick.
      */
     public void tick() {
-        if (state == BuildState.IDLE || state == BuildState.FINISHED || 
-            state == BuildState.ERROR || state == BuildState.PAUSED) {
+        if (state == BuildState.IDLE || state == BuildState.FINISHED ||
+                state == BuildState.ERROR || state == BuildState.PAUSED) {
             return;
         }
-        
+
         tickCounter++;
-        
-        switch (state) {
-            case SPAWNING:
-                // Wait a bit after spawning
-                if (tickCounter > 20) {
-                    startNextLayer();
-                }
-                break;
-                
-            case WALKING:
-                tickWalking();
-                break;
-                
-            case BUILDING:
-                tickBuilding();
-                break;
-                
-            case BREAKING:
-                tickBreaking();
-                break;
-                
-            case LAYER_COMPLETE:
-                // Pause between layers
-                if (tickCounter > 60) {
-                    startNextLayer();
-                }
-                break;
-        }
-    }
-    
-    private void startNextLayer() {
-        if (currentLayerIndex >= sortedLayers.size()) {
-            // All layers complete
-            finishBuild();
-            return;
-        }
-        
-        BuildLayer layer = sortedLayers.get(currentLayerIndex);
-        currentBlockIndex = 0;
-        
-        sendMessage("§b▶ Слой " + (currentLayerIndex + 1) + "/" + sortedLayers.size() + ": " + layer.getName());
-        
-        if (layer.getBlocks().isEmpty()) {
-            // Empty layer, skip
-            currentLayerIndex++;
-            startNextLayer();
-            return;
-        }
-        
-        state = BuildState.BUILDING;
-        tickCounter = 0;
-    }
-    
-    private void tickBuilding() {
+
         int delay = SPEED_DELAYS[speed - 1];
-        
+
         if (tickCounter < delay) {
             return;
         }
-        
+
         tickCounter = 0;
-        
-        // Get current layer and block
+
+        // Process next block
+        processNextBlock();
+    }
+
+    /**
+     * Processes the next block in the build queue.
+     */
+    private void processNextBlock() {
         if (currentLayerIndex >= sortedLayers.size()) {
             finishBuild();
             return;
         }
-        
+
         BuildLayer layer = sortedLayers.get(currentLayerIndex);
-        
+
         if (currentBlockIndex >= layer.getBlocks().size()) {
             // Layer complete
             completeLayer(layer);
             return;
         }
-        
+
         BlockEntry entry = layer.getBlocks().get(currentBlockIndex);
         BlockPos worldPos = placement.toWorldPos(entry);
-        
+
         // Check if we need to break an existing block
         BlockState existingState = world.getBlockState(worldPos);
-        String existingId = existingState.getBlock().toString();
-        
-        if (!existingState.isAir() && !isReplaceable(existingId)) {
-            // Need to break the block first
-            currentBlock = entry;
-            state = BuildState.BREAKING;
-            tickCounter = 0;
-            return;
+
+        if (!existingState.isAir() && !isReplaceable(existingState)) {
+            // Break the block first
+            breakBlock(worldPos, existingState);
         }
-        
-        // Check if we need to walk closer
-        if (!builder.canReach(worldPos)) {
-            BlockPos standPos = builder.getPositionToReach(worldPos);
-            builder.walkTo(standPos);
-            currentBlock = entry;
-            state = BuildState.WALKING;
-            return;
-        }
-        
+
         // Place the block
         BlockState targetState = entry.getBlockState();
         targetState = placement.rotateBlockState(targetState);
-        
-        if (builder.placeBlock(worldPos, targetState)) {
+
+        if (placeBlock(worldPos, targetState)) {
             totalBlocksBuilt++;
         }
-        
+
         currentBlockIndex++;
     }
-    
-    private void tickWalking() {
-        if (builder.tickMovement()) {
-            // Arrived at destination
-            state = BuildState.BUILDING;
-            tickCounter = 0;
+
+    /**
+     * Places a block directly (no fake player needed).
+     */
+    private boolean placeBlock(BlockPos pos, BlockState state) {
+        try {
+            // Place block on server thread
+            world.getServer().execute(() -> {
+                boolean success = world.setBlockState(pos, state, 3);
+
+                if (success) {
+                    // Play place sound
+                    world.playSound(null, pos,
+                            state.getSoundGroup().getPlaceSound(),
+                            SoundCategory.BLOCKS, 1.0f, 1.0f);
+                }
+            });
+
+            return true;
+        } catch (Exception e) {
+            LOGGER.error("Failed to place block at {}: {}", pos, e.getMessage());
+            return false;
         }
     }
-    
-    private void tickBreaking() {
-        int delay = SPEED_DELAYS[speed - 1] / 2;
-        
-        if (tickCounter < delay) {
-            // Animation tick
-            builder.swingHand();
-            return;
+
+    /**
+     * Breaks a block directly.
+     */
+    private void breakBlock(BlockPos pos, BlockState state) {
+        try {
+            world.getServer().execute(() -> {
+                // Play break sound
+                world.playSound(null, pos,
+                        state.getSoundGroup().getBreakSound(),
+                        SoundCategory.BLOCKS, 1.0f, 1.0f);
+
+                // Break the block
+                world.breakBlock(pos, false);
+            });
+        } catch (Exception e) {
+            LOGGER.error("Failed to break block at {}: {}", pos, e.getMessage());
         }
-        
-        if (currentBlock != null) {
-            BlockPos worldPos = placement.toWorldPos(currentBlock);
-            builder.breakBlock(worldPos);
-        }
-        
-        state = BuildState.BUILDING;
-        tickCounter = 0;
     }
-    
+
+    /**
+     * Completes the current layer.
+     */
     private void completeLayer(BuildLayer layer) {
-        sendMessage("§a✓ Слой завершён: " + layer.getName() + 
-            " (" + layer.getBlockCount() + " блоков)");
-        
+        sendMessage("§a✓ Слой завершён: " + layer.getName() +
+                " (" + layer.getBlockCount() + " блоков)");
+
         if (layerCompleteCallback != null) {
             layerCompleteCallback.run();
         }
-        
+
         currentLayerIndex++;
-        state = BuildState.LAYER_COMPLETE;
-        tickCounter = 0;
-        
+        currentBlockIndex = 0;
+
         LOGGER.info("Layer complete: {} ({} blocks)", layer.getName(), layer.getBlockCount());
+
+        // Small pause between layers
+        state = BuildState.LAYER_COMPLETE;
+        tickCounter = -30; // 1.5 second pause
     }
-    
+
+    /**
+     * Finishes the entire build.
+     */
     private void finishBuild() {
         sendMessage("§a§l✓ Строительство завершено!");
         sendMessage("§7Построено блоков: " + totalBlocksBuilt);
-        
-        builder.despawn();
+
         state = BuildState.FINISHED;
-        
+
         if (buildCompleteCallback != null) {
             buildCompleteCallback.run();
         }
-        
+
         LOGGER.info("Build complete: {} blocks", totalBlocksBuilt);
     }
-    
-    private boolean isReplaceable(String blockId) {
+
+    /**
+     * Checks if a block state is replaceable.
+     */
+    private boolean isReplaceable(BlockState state) {
+        String blockId = state.getBlock().toString();
+
         // Remove "Block{" and "}" wrapper if present
         if (blockId.startsWith("Block{")) {
             blockId = blockId.substring(6, blockId.length() - 1);
         }
-        return REPLACEABLE_BLOCKS.contains(blockId) || blockId.contains("air");
+
+        return REPLACEABLE_BLOCKS.contains(blockId) ||
+                blockId.contains("air") ||
+                state.isReplaceable();
     }
-    
+
+    /**
+     * Sends a message via callback.
+     */
     private void sendMessage(String message) {
         if (messageCallback != null) {
             messageCallback.accept(message);
         }
     }
-    
+
     // === Callbacks ===
-    
+
     public void setMessageCallback(Consumer<String> callback) {
         this.messageCallback = callback;
     }
-    
+
     public void setLayerCompleteCallback(Runnable callback) {
         this.layerCompleteCallback = callback;
     }
-    
+
     public void setBuildCompleteCallback(Runnable callback) {
         this.buildCompleteCallback = callback;
     }
