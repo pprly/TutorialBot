@@ -47,17 +47,43 @@ public class BuildManager {
         
         if (schematic == null) {
             sendChatMessage("§cОшибка: не удалось загрузить схему '" + filename + "'");
+            LOGGER.error("Failed to load schematic: {}", filename);
             return false;
         }
         
         currentSchematic = schematic;
+        
+        // Start placement - this creates the SchematicPlacement
         placementController.startPlacement(schematic);
         
-        sendChatMessage("§aСхема загружена: " + schematic.getName());
+        // Verify placement was created
+        if (!placementController.hasPlacement()) {
+            sendChatMessage("§cОшибка: не удалось создать размещение");
+            LOGGER.error("Placement was not created!");
+            return false;
+        }
+        
+        if (!placementController.isPlacementMode()) {
+            sendChatMessage("§cОшибка: не удалось войти в режим размещения");
+            LOGGER.error("Not in placement mode!");
+            return false;
+        }
+        
+        sendChatMessage("§a✓ Схема загружена: " + schematic.getName());
         sendChatMessage("§7Слоёв: " + schematic.getLayerCount() + 
             ", блоков: " + schematic.getTotalBlocks());
-        sendChatMessage("§eИспользуйте стрелки для перемещения, R для поворота");
-        sendChatMessage("§eEnter или /build confirm для подтверждения");
+        sendChatMessage("§e━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        sendChatMessage("§eУправление:");
+        sendChatMessage("§7  /build move <north|south|east|west|up|down> [кол-во]");
+        sendChatMessage("§7  /build rotate [90|180|270]");
+        sendChatMessage("§7  /build confirm §e- подтвердить позицию");
+        sendChatMessage("§e━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        
+        LOGGER.info("Schematic loaded successfully: {}", schematic.getName());
+        LOGGER.info("Placement mode: {}", placementController.isPlacementMode());
+        LOGGER.info("Has placement: {}", placementController.hasPlacement());
+        
+        // DO NOT AUTO-CONFIRM! User must do it manually with /build confirm
         
         return true;
     }
@@ -75,6 +101,7 @@ public class BuildManager {
         placementController.clear();
         
         sendChatMessage("§7Схема выгружена");
+        LOGGER.info("Schematic unloaded");
     }
     
     /**
@@ -109,8 +136,14 @@ public class BuildManager {
         if (placement != null) {
             sb.append("§7Позиция: §f").append(placement.getOrigin().toShortString()).append("\n");
             sb.append("§7Поворот: §f").append(placement.getRotation()).append("°\n");
-            sb.append("§7Статус: §f").append(placement.isConfirmed() ? "подтверждено" : "размещение").append("\n");
+            sb.append("§7Статус: §f").append(placement.isConfirmed() ? "§aподтверждено" : "§eразмещение").append("\n");
+        } else {
+            sb.append("§cРазмещение не создано!\n");
         }
+        
+        // Debug info
+        sb.append("§8[Debug] Placement mode: ").append(placementController.isPlacementMode()).append("\n");
+        sb.append("§8[Debug] Has placement: ").append(placementController.hasPlacement()).append("\n");
         
         return sb.toString();
     }
@@ -139,24 +172,56 @@ public class BuildManager {
      * Rotates the schematic placement.
      */
     public void rotate(int degrees) {
-        if (placementController.isPlacementMode()) {
-            placementController.setRotation(
-                placementController.getPlacement().getRotation() + degrees);
-            sendChatMessage("§7Поворот: " + placementController.getPlacement().getRotation() + "°");
-        } else {
+        if (!placementController.isPlacementMode()) {
             sendChatMessage("§cСхема не в режиме размещения");
+            LOGGER.warn("Not in placement mode! hasPlacement={}, isPlacementMode={}", 
+                placementController.hasPlacement(), placementController.isPlacementMode());
+            return;
         }
+        
+        placementController.setRotation(
+            placementController.getPlacement().getRotation() + degrees);
+        sendChatMessage("§7Поворот: " + placementController.getPlacement().getRotation() + "°");
     }
     
     /**
      * Confirms the placement.
      */
     public boolean confirmPlacement() {
+        LOGGER.info("confirmPlacement() called from: {}", 
+            Thread.currentThread().getStackTrace()[2].toString());
+        LOGGER.info("Attempting to confirm placement...");
+        LOGGER.info("  Has placement: {}", placementController.hasPlacement());
+        LOGGER.info("  Placement mode: {}", placementController.isPlacementMode());
+        
+        if (!placementController.hasPlacement()) {
+            sendChatMessage("§cОшибка: размещение не создано");
+            LOGGER.error("Cannot confirm: no placement exists");
+            return false;
+        }
+        
+        if (!placementController.isPlacementMode()) {
+            sendChatMessage("§cОшибка: не в режиме размещения");
+            LOGGER.error("Cannot confirm: not in placement mode");
+            return false;
+        }
+        
+        SchematicPlacement placement = placementController.getPlacement();
+        if (placement.isConfirmed()) {
+            sendChatMessage("§eРазмещение уже подтверждено");
+            LOGGER.warn("Placement already confirmed");
+            return false;
+        }
+        
         if (placementController.confirm()) {
-            sendChatMessage("§aПозиция подтверждена!");
-            sendChatMessage("§7Используйте /build start для начала строительства");
+            sendChatMessage("§a✓ Позиция подтверждена!");
+            sendChatMessage("§7Используйте §f/build start §7для начала строительства");
+            LOGGER.info("Placement confirmed successfully");
             return true;
         }
+        
+        sendChatMessage("§cНе удалось подтвердить размещение");
+        LOGGER.error("Failed to confirm placement");
         return false;
     }
     

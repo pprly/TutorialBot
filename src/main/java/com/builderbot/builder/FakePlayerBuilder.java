@@ -2,16 +2,13 @@ package com.builderbot.builder;
 
 import com.mojang.authlib.GameProfile;
 import net.minecraft.block.BlockState;
-import net.minecraft.entity.Entity;
 import net.minecraft.entity.MovementType;
-import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.network.ClientConnection;
 import net.minecraft.network.NetworkSide;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ConnectedClientData;
 import net.minecraft.server.network.ServerPlayNetworkHandler;
 import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.network.SyncedClientOptions;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.sound.SoundCategory;
 import net.minecraft.util.Hand;
@@ -22,6 +19,9 @@ import net.minecraft.world.GameMode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.UUID;
 
 /**
@@ -54,6 +54,132 @@ public class FakePlayerBuilder {
     }
 
     /**
+     * Creates a SyncedClientOptions object using reflection.
+     */
+    private static Object createSyncedClientOptions() throws Exception {
+        // Try MANY different class names
+        String[] possibleClassNames = {
+            "net.minecraft.class_7596",  // Intermediary mapping (most reliable)
+            "net.minecraft.server.network.SyncedClientOptions",  // Yarn 1.21+
+            "net.minecraft.client.option.SyncedClientOptions",  // Old Yarn
+            "net.minecraft.server.network.ServerPlayerEntity$SyncedClientOptions",  // Nested class?
+        };
+
+        for (String className : possibleClassNames) {
+            try {
+                Class<?> clazz = Class.forName(className);
+                LOGGER.info("✓ Found SyncedClientOptions class: {}", className);
+
+                // Try createDefault() method (static factory)
+                try {
+                    Method createDefault = clazz.getMethod("createDefault");
+                    createDefault.setAccessible(true);
+                    Object result = createDefault.invoke(null);
+                    LOGGER.info("✓ Created SyncedClientOptions using createDefault()");
+                    return result;
+                } catch (NoSuchMethodException e) {
+                    LOGGER.debug("No createDefault() method");
+                }
+
+                // Try intermediary method name
+                try {
+                    Method method = clazz.getMethod("method_44709");
+                    method.setAccessible(true);
+                    Object result = method.invoke(null);
+                    LOGGER.info("✓ Created SyncedClientOptions using method_44709()");
+                    return result;
+                } catch (NoSuchMethodException e) {
+                    LOGGER.debug("No method_44709() method");
+                }
+
+                // Try to find ANY static method that returns this type
+                for (Method method : clazz.getDeclaredMethods()) {
+                    if (java.lang.reflect.Modifier.isStatic(method.getModifiers()) &&
+                        method.getReturnType() == clazz &&
+                        method.getParameterCount() == 0) {
+                        try {
+                            method.setAccessible(true);
+                            Object result = method.invoke(null);
+                            LOGGER.info("✓ Created SyncedClientOptions using {}", method.getName());
+                            return result;
+                        } catch (Exception ex) {
+                            // Continue
+                        }
+                    }
+                }
+
+                // Try no-args constructor
+                try {
+                    Constructor<?> constructor = clazz.getDeclaredConstructor();
+                    constructor.setAccessible(true);
+                    Object result = constructor.newInstance();
+                    LOGGER.info("✓ Created SyncedClientOptions using no-args constructor");
+                    return result;
+                } catch (NoSuchMethodException e) {
+                    LOGGER.debug("No no-args constructor");
+                }
+
+                // Try ANY constructor with default parameters
+                for (Constructor<?> constructor : clazz.getDeclaredConstructors()) {
+                    try {
+                        constructor.setAccessible(true);
+                        Class<?>[] paramTypes = constructor.getParameterTypes();
+                        Object[] params = new Object[paramTypes.length];
+                        
+                        // Fill with defaults
+                        for (int i = 0; i < paramTypes.length; i++) {
+                            if (paramTypes[i] == boolean.class) params[i] = false;
+                            else if (paramTypes[i] == int.class) params[i] = 0;
+                            else if (paramTypes[i] == float.class) params[i] = 0.0f;
+                            else if (paramTypes[i] == double.class) params[i] = 0.0;
+                            else if (paramTypes[i] == String.class) params[i] = "";
+                            // else remains null
+                        }
+                        
+                        Object result = constructor.newInstance(params);
+                        LOGGER.info("✓ Created SyncedClientOptions using constructor with {} params", paramTypes.length);
+                        return result;
+                    } catch (Exception ex) {
+                        // Continue
+                    }
+                }
+
+            } catch (ClassNotFoundException e) {
+                LOGGER.debug("Class not found: {}", className);
+            }
+        }
+
+        LOGGER.error("Failed to find SyncedClientOptions with any of:");
+        for (String name : possibleClassNames) {
+            LOGGER.error("  - {}", name);
+        }
+        throw new RuntimeException("Could not find or create SyncedClientOptions");
+    }
+
+    /**
+     * Creates ServerPlayerEntity using reflection to bypass type checking.
+     */
+    private static ServerPlayerEntity createFakePlayer(MinecraftServer server, ServerWorld world, 
+                                                       GameProfile profile) throws Exception {
+        // Create client options
+        Object clientOptions = createSyncedClientOptions();
+
+        // Find ServerPlayerEntity constructor
+        Constructor<ServerPlayerEntity> constructor = ServerPlayerEntity.class.getDeclaredConstructor(
+            MinecraftServer.class,
+            ServerWorld.class,
+            GameProfile.class,
+            clientOptions.getClass()
+        );
+        
+        constructor.setAccessible(true);
+        ServerPlayerEntity player = constructor.newInstance(server, world, profile, clientOptions);
+        
+        LOGGER.info("✓ Successfully created ServerPlayerEntity");
+        return player;
+    }
+
+    /**
      * Spawns the fake player at the given position.
      */
     public boolean spawn(ServerWorld world, BlockPos pos) {
@@ -69,13 +195,8 @@ public class FakePlayerBuilder {
         GameProfile profile = new GameProfile(UUID.randomUUID(), playerName);
 
         try {
-            // Create fake player entity with SyncedClientOptions.createDefault()
-            fakePlayer = new ServerPlayerEntity(
-                    server,
-                    world,
-                    profile,
-                    SyncedClientOptions.createDefault()
-            );
+            // Create fake player using reflection
+            fakePlayer = createFakePlayer(server, world, profile);
 
             // Position the player
             fakePlayer.setPosition(pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5);
@@ -84,7 +205,6 @@ public class FakePlayerBuilder {
             fakePlayer.changeGameMode(GameMode.CREATIVE);
 
             // Create fake network handler to prevent NPEs
-            // This is a minimal implementation
             ClientConnection connection = new ClientConnection(NetworkSide.CLIENTBOUND);
             ConnectedClientData clientData = ConnectedClientData.createDefault(profile, false);
             fakePlayer.networkHandler = new ServerPlayNetworkHandler(server, connection, fakePlayer, clientData);
@@ -98,6 +218,7 @@ public class FakePlayerBuilder {
             return true;
         } catch (Exception e) {
             LOGGER.error("Failed to spawn fake player", e);
+            e.printStackTrace();
             return false;
         }
     }

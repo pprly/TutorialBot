@@ -2,6 +2,7 @@ package com.builderbot.placement;
 
 import com.builderbot.schematic.TutorialSchematic;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.text.Text;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import org.slf4j.Logger;
@@ -28,17 +29,27 @@ public class PlacementController {
      */
     public void startPlacement(TutorialSchematic schematic) {
         MinecraftClient client = MinecraftClient.getInstance();
+        
+        LOGGER.info("startPlacement called for schematic: {}", schematic.getName());
+        
         if (client.player == null) {
-            LOGGER.error("Cannot start placement: no player");
+            LOGGER.error("Cannot start placement: client.player is NULL!");
+            sendMessage("§cОшибка: игрок не найден");
             return;
         }
         
         BlockPos playerPos = client.player.getBlockPos();
+        LOGGER.info("Player position: {}", playerPos.toShortString());
+        
         this.placement = new SchematicPlacement(schematic, playerPos);
         this.placementMode = true;
         
-        LOGGER.info("Started placement mode for '{}' at {}", 
-            schematic.getName(), playerPos.toShortString());
+        LOGGER.info("Placement created: {}", placement);
+        LOGGER.info("Placement mode set to: {}", placementMode);
+        LOGGER.info("hasPlacement(): {}", hasPlacement());
+        LOGGER.info("isPlacementMode(): {}", isPlacementMode());
+        
+        sendMessage("§a✓ Режим размещения активирован");
     }
     
     /**
@@ -47,6 +58,7 @@ public class PlacementController {
     public void setPlacement(SchematicPlacement placement) {
         this.placement = placement;
         this.placementMode = placement != null && !placement.isConfirmed();
+        LOGGER.info("setPlacement: placement={}, placementMode={}", placement != null, placementMode);
     }
     
     /**
@@ -60,7 +72,10 @@ public class PlacementController {
      * Checks if placement mode is active.
      */
     public boolean isPlacementMode() {
-        return placementMode && placement != null && !placement.isConfirmed();
+        boolean result = placementMode && placement != null && !placement.isConfirmed();
+        LOGGER.debug("isPlacementMode: placementMode={}, placement={}, confirmed={}, result={}", 
+            placementMode, placement != null, placement != null ? placement.isConfirmed() : "N/A", result);
+        return result;
     }
     
     /**
@@ -74,7 +89,9 @@ public class PlacementController {
      * Checks if there is any placement (confirmed or not).
      */
     public boolean hasPlacement() {
-        return placement != null;
+        boolean result = placement != null;
+        LOGGER.debug("hasPlacement: {}", result);
+        return result;
     }
     
     /**
@@ -85,10 +102,33 @@ public class PlacementController {
     }
     
     public void move(Direction direction, int amount) {
-        if (placement != null && isPlacementMode()) {
-            placement.move(direction, amount);
-            LOGGER.debug("Moved schematic {} by {}", direction, amount);
+        LOGGER.info("move called: direction={}, amount={}", direction, amount);
+        LOGGER.info("  Current state: hasPlacement={}, isPlacementMode={}", hasPlacement(), isPlacementMode());
+        
+        if (placement == null) {
+            LOGGER.error("Cannot move: placement is NULL");
+            sendMessage("§cОшибка: размещение не создано (placement == null)");
+            return;
         }
+        
+        if (!placementMode) {
+            LOGGER.error("Cannot move: placementMode is FALSE");
+            sendMessage("§cОшибка: не в режиме размещения (placementMode == false)");
+            return;
+        }
+        
+        if (placement.isConfirmed()) {
+            LOGGER.error("Cannot move: placement is confirmed");
+            sendMessage("§cОшибка: размещение уже подтверждено");
+            return;
+        }
+        
+        BlockPos oldPos = placement.getOrigin();
+        placement.move(direction, amount);
+        BlockPos newPos = placement.getOrigin();
+        
+        LOGGER.info("Moved from {} to {}", oldPos.toShortString(), newPos.toShortString());
+        sendMessage("§7Позиция: " + newPos.toShortString());
     }
     
     /**
@@ -117,6 +157,7 @@ public class PlacementController {
         if (placement != null && isPlacementMode()) {
             placement.rotate90();
             LOGGER.info("Rotated schematic to {}°", placement.getRotation());
+            sendMessage("§7Поворот: " + placement.getRotation() + "°");
         }
     }
     
@@ -127,6 +168,7 @@ public class PlacementController {
         if (placement != null && isPlacementMode()) {
             placement.setRotation(degrees);
             LOGGER.info("Set schematic rotation to {}°", placement.getRotation());
+            sendMessage("§7Поворот: " + placement.getRotation() + "°");
         }
     }
     
@@ -135,13 +177,25 @@ public class PlacementController {
      * After confirmation, the schematic position is locked.
      */
     public boolean confirm() {
+        LOGGER.info("confirm() called");
+        LOGGER.info("  placement: {}", placement != null ? "EXISTS" : "NULL");
+        LOGGER.info("  placementMode: {}", placementMode);
+        
         if (placement == null) {
-            LOGGER.warn("Cannot confirm: no placement");
+            LOGGER.error("Cannot confirm: placement is NULL");
+            sendMessage("§cОшибка: размещение не создано (placement == null)");
+            return false;
+        }
+        
+        if (!placementMode) {
+            LOGGER.error("Cannot confirm: placementMode is FALSE");
+            sendMessage("§cОшибка: не в режиме размещения (placementMode == false)");
             return false;
         }
         
         if (placement.isConfirmed()) {
             LOGGER.warn("Placement already confirmed");
+            sendMessage("§eРазмещение уже подтверждено");
             return false;
         }
         
@@ -150,6 +204,7 @@ public class PlacementController {
         LOGGER.info("Confirmed placement at {} with {}° rotation", 
             placement.getOrigin().toShortString(), placement.getRotation());
         
+        sendMessage("§a✓ Позиция подтверждена!");
         return true;
     }
     
@@ -161,6 +216,7 @@ public class PlacementController {
             LOGGER.info("Cancelled placement");
             placement = null;
             placementMode = false;
+            sendMessage("§cРазмещение отменено");
         }
     }
     
@@ -181,6 +237,7 @@ public class PlacementController {
             placement.setConfirmed(false);
             placementMode = true;
             LOGGER.info("Re-entered placement mode for editing");
+            sendMessage("§eВошли в режим редактирования");
         }
     }
     
@@ -240,5 +297,12 @@ public class PlacementController {
         }
         
         return false;
+    }
+    
+    private void sendMessage(String message) {
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (client.player != null) {
+            client.player.sendMessage(Text.literal(message), true);
+        }
     }
 }

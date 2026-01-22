@@ -7,6 +7,7 @@ import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
+import net.minecraft.text.Text;
 import net.minecraft.util.math.Direction;
 import org.lwjgl.glfw.GLFW;
 
@@ -30,6 +31,9 @@ public class KeyBindings {
     private static boolean wasRotatePressed = false;
     private static boolean wasConfirmPressed = false;
     private static boolean wasCancelPressed = false;
+    
+    // Debounce for movement keys
+    private static int moveCooldown = 0;
     
     /**
      * Registers all key bindings.
@@ -108,12 +112,18 @@ public class KeyBindings {
      * Called every client tick to check key states.
      */
     private static void onTick(MinecraftClient client) {
-        if (client.player == null || client.currentScreen != null) {
-            return; // Don't process when in a screen
+        if (client.player == null) {
+            return;
+        }
+        
+        // Decrease cooldown
+        if (moveCooldown > 0) {
+            moveCooldown--;
         }
         
         PlacementController controller = BuildManager.getInstance().getPlacementController();
         
+        // Debug: Check placement state
         if (!controller.isPlacementMode()) {
             // Reset states when not in placement mode
             wasRotatePressed = false;
@@ -122,10 +132,16 @@ public class KeyBindings {
             return;
         }
         
+        // Don't process when a screen is open (except for our HUD)
+        if (client.currentScreen != null) {
+            return;
+        }
+        
         // Rotate (edge triggered)
         if (keyRotate.isPressed()) {
             if (!wasRotatePressed) {
                 controller.rotate();
+                sendMessage(client, "§7Поворот: " + controller.getPlacement().getRotation() + "°");
                 wasRotatePressed = true;
             }
         } else {
@@ -152,25 +168,45 @@ public class KeyBindings {
             wasCancelPressed = false;
         }
         
-        // Movement keys (level triggered - held down = repeat)
-        // Using wasPressed to add a small repeat delay
-        if (keyMoveNorth.isPressed()) {
-            controller.move(Direction.NORTH);
+        // Movement keys with cooldown to prevent too fast movement
+        if (moveCooldown == 0) {
+            boolean moved = false;
+            
+            if (keyMoveNorth.isPressed()) {
+                controller.move(Direction.NORTH);
+                moved = true;
+            }
+            if (keyMoveSouth.isPressed()) {
+                controller.move(Direction.SOUTH);
+                moved = true;
+            }
+            if (keyMoveEast.isPressed()) {
+                controller.move(Direction.EAST);
+                moved = true;
+            }
+            if (keyMoveWest.isPressed()) {
+                controller.move(Direction.WEST);
+                moved = true;
+            }
+            if (keyMoveUp.isPressed()) {
+                controller.move(Direction.UP);
+                moved = true;
+            }
+            if (keyMoveDown.isPressed()) {
+                controller.move(Direction.DOWN);
+                moved = true;
+            }
+            
+            if (moved) {
+                moveCooldown = 3; // 3 ticks cooldown (150ms)
+                sendMessage(client, "§7Позиция: " + controller.getPlacement().getOrigin().toShortString());
+            }
         }
-        if (keyMoveSouth.isPressed()) {
-            controller.move(Direction.SOUTH);
-        }
-        if (keyMoveEast.isPressed()) {
-            controller.move(Direction.EAST);
-        }
-        if (keyMoveWest.isPressed()) {
-            controller.move(Direction.WEST);
-        }
-        if (keyMoveUp.isPressed()) {
-            controller.move(Direction.UP);
-        }
-        if (keyMoveDown.isPressed()) {
-            controller.move(Direction.DOWN);
+    }
+    
+    private static void sendMessage(MinecraftClient client, String message) {
+        if (client.player != null) {
+            client.player.sendMessage(Text.literal(message), true); // true = action bar
         }
     }
 }
