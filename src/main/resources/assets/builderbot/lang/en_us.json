@@ -1,0 +1,43 @@
+{
+  "category.builderbot": "Builder Bot",
+  "key.builderbot.rotate": "Rotate Schematic",
+  "key.builderbot.confirm": "Confirm Placement",
+  "key.builderbot.cancel": "Cancel Placement",
+  "key.builderbot.move_north": "Move North",
+  "key.builderbot.move_south": "Move South",
+  "key.builderbot.move_east": "Move East",
+  "key.builderbot.move_west": "Move West",
+  "key.builderbot.move_up": "Move Up",
+  "key.builderbot.move_down": "Move Down",
+  
+  "builderbot.message.loaded": "Schematic loaded: %s",
+  "builderbot.message.unloaded": "Schematic unloaded",
+  "builderbot.message.confirmed": "Placement confirmed!",
+  "builderbot.message.build_started": "Building started: %s",
+  "builderbot.message.build_paused": "Building paused",
+  "builderbot.message.build_resumed": "Building resumed",
+  "builderbot.message.build_stopped": "Building stopped",
+  "builderbot.message.build_complete": "Building complete!",
+  "builderbot.message.layer_complete": "Layer complete: %s",
+  "builderbot.message.speed_set": "Speed set to %d/10",
+  
+  "builderbot.error.no_schematic": "No schematic loaded",
+  "builderbot.error.not_confirmed": "Placement not confirmed",
+  "builderbot.error.load_failed": "Failed to load schematic: %s",
+  "builderbot.error.spawn_failed": "Failed to spawn builder",
+  
+  "builderbot.hud.placement_mode": "Placement Mode",
+  "builderbot.hud.schematic": "Schematic: %s",
+  "builderbot.hud.position": "Position: %s",
+  "builderbot.hud.rotation": "Rotation: %d°",
+  "builderbot.hud.status": "Status: %s",
+  "builderbot.hud.progress": "Progress: %s",
+  "builderbot.hud.speed": "Speed: %d/10",
+  
+  "builderbot.state.idle": "Idle",
+  "builderbot.state.building": "Building",
+  "builderbot.state.walking": "Walking",
+  "builderbot.state.breaking": "Breaking",
+  "builderbot.state.paused": "Paused",
+  "builderbot.state.finished": "Finished"
+}

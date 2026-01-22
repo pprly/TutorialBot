@@ -1,0 +1,16 @@
+# Gradle
+.gradle/
+build/
+
+# IntelliJ
+.idea/
+*.iml
+out/
+
+# Fabric / Minecraft
+run/
+logs/
+
+# OS
+.DS_Store
+Thumbs.db

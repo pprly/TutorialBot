@@ -1,0 +1,43 @@
+{
+  "category.builderbot": "Builder Bot",
+  "key.builderbot.rotate": "Повернуть схему",
+  "key.builderbot.confirm": "Подтвердить размещение",
+  "key.builderbot.cancel": "Отменить размещение",
+  "key.builderbot.move_north": "Двигать на север",
+  "key.builderbot.move_south": "Двигать на юг",
+  "key.builderbot.move_east": "Двигать на восток",
+  "key.builderbot.move_west": "Двигать на запад",
+  "key.builderbot.move_up": "Двигать вверх",
+  "key.builderbot.move_down": "Двигать вниз",
+  
+  "builderbot.message.loaded": "Схема загружена: %s",
+  "builderbot.message.unloaded": "Схема выгружена",
+  "builderbot.message.confirmed": "Позиция подтверждена!",
+  "builderbot.message.build_started": "Строительство начато: %s",
+  "builderbot.message.build_paused": "Строительство приостановлено",
+  "builderbot.message.build_resumed": "Строительство возобновлено",
+  "builderbot.message.build_stopped": "Строительство остановлено",
+  "builderbot.message.build_complete": "Строительство завершено!",
+  "builderbot.message.layer_complete": "Слой завершён: %s",
+  "builderbot.message.speed_set": "Скорость: %d/10",
+  
+  "builderbot.error.no_schematic": "Схема не загружена",
+  "builderbot.error.not_confirmed": "Размещение не подтверждено",
+  "builderbot.error.load_failed": "Ошибка загрузки схемы: %s",
+  "builderbot.error.spawn_failed": "Ошибка создания строителя",
+  
+  "builderbot.hud.placement_mode": "Режим размещения",
+  "builderbot.hud.schematic": "Схема: %s",
+  "builderbot.hud.position": "Позиция: %s",
+  "builderbot.hud.rotation": "Поворот: %d°",
+  "builderbot.hud.status": "Статус: %s",
+  "builderbot.hud.progress": "Прогресс: %s",
+  "builderbot.hud.speed": "Скорость: %d/10",
+  
+  "builderbot.state.idle": "Ожидание",
+  "builderbot.state.building": "Строит",
+  "builderbot.state.walking": "Идёт",
+  "builderbot.state.breaking": "Ломает",
+  "builderbot.state.paused": "Пауза",
+  "builderbot.state.finished": "Завершено"
+}
